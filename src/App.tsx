@@ -90,9 +90,9 @@ function App() {
         setIntroPhase((current) =>
           current === "visible" ? "exiting" : current,
         ),
-      2300,
+      4200,
     )
-    const hideTimer = window.setTimeout(() => setIntroPhase("hidden"), 2900)
+    const hideTimer = window.setTimeout(() => setIntroPhase("hidden"), 4900)
     return () => {
       window.clearTimeout(exitTimer)
       window.clearTimeout(hideTimer)
@@ -192,25 +192,58 @@ function App() {
             aria-label="山城拾光封面，点击跳过"
             onClick={() => setIntroPhase("hidden")}
           >
+            <span className="intro-backdrop" aria-hidden="true" />
+            <span className="intro-grain" aria-hidden="true" />
             <span className="intro-stars" aria-hidden="true" />
-            <span className="intro-orbit orbit-one" aria-hidden="true" />
-            <span className="intro-orbit orbit-two" aria-hidden="true" />
-            <span className="intro-nfc">
-              <i />
-              NFC MEMORY
-            </span>
+
+            <svg className="memory-orbit-svg" viewBox="0 0 390 780" preserveAspectRatio="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="memoryLineGradient" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#78caff" stopOpacity="0.05" />
+                  <stop offset="48%" stopColor="#b9e7ff" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#e6bd82" stopOpacity="0.2" />
+                </linearGradient>
+                <filter id="memoryGlow"><feGaussianBlur stdDeviation="2.5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+              </defs>
+              <path className="memory-line memory-line-a" d="M-30 300 C70 210 115 275 185 220 S310 155 425 205" />
+              <path className="memory-line memory-line-b" d="M-20 410 C70 470 115 360 205 415 S315 490 420 390" />
+              <path className="memory-line memory-line-c" d="M-20 570 C75 520 130 630 210 585 S325 555 420 620" />
+              <circle className="memory-node node-a" cx="80" cy="267" r="3" />
+              <circle className="memory-node node-b" cx="304" cy="190" r="3" />
+              <circle className="memory-node node-c" cx="112" cy="433" r="3" />
+              <circle className="memory-node node-d" cx="300" cy="583" r="3" />
+              <circle className="memory-pulse" cx="80" cy="267" r="9" />
+              <circle className="memory-pulse pulse-b" cx="300" cy="583" r="9" />
+            </svg>
+
+            <span className="intro-nfc"><i /> NFC MEMORY <b>· CQ-028</b></span>
+            <span className="intro-coordinate coordinate-left" aria-hidden="true"><i /> 29°33′N <span>/</span> 106°33′E</span>
+            <span className="intro-coordinate coordinate-right" aria-hidden="true">MEMORY SYSTEM <i /></span>
+
             <span className="intro-title">
-              <small>CHONGQING · 记忆已唤醒</small>
+              <small><i /> CHONGQING · MEMORY AWAKENED <i /></small>
               <strong>山城拾光</strong>
               <em>一枚头箍 · 一段重庆记忆</em>
             </span>
-            <span className="intro-mountains" aria-hidden="true">
-              <MountainMark />
+            <span className="intro-mountains" aria-hidden="true"><MountainMark /></span>
+
+            <span className="memory-float-card memory-card-one" aria-hidden="true">
+              <i className="memory-card-pin" />
+              <span><b>01 / CITY LIGHTS</b><small>洪崖洞 · 嘉陵江畔</small></span>
+              <i className="memory-card-signal" />
             </span>
-            <span className="intro-progress">
-              <i />
+            <span className="memory-float-card memory-card-two" aria-hidden="true">
+              <i className="memory-card-pin" />
+              <span><b>02 / NIGHT WALK</b><small>千厮门大桥 · 夜游</small></span>
+              <i className="memory-card-signal" />
             </span>
-            <span className="intro-skip">轻触跳过</span>
+
+            <span className="intro-scan-ring" aria-hidden="true">
+              <i className="scan-ring ring-one" /><i className="scan-ring ring-two" />
+              <i className="scan-core" /><b>NFC</b>
+            </span>
+            <span className="intro-progress"><i /></span>
+            <span className="intro-skip">轻触进入 <i>↗</i></span>
           </button>
         )}
         <div className="stars" aria-hidden="true" />
