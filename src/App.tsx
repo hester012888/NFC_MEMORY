@@ -79,6 +79,9 @@ function App() {
   const [manageOpen, setManageOpen] = useState(false)
   const [toast, setToast] = useState("")
   const [isDragging, setIsDragging] = useState(false)
+  const [carouselDirection, setCarouselDirection] = useState<
+    "next" | "previous"
+  >("next")
   const tapCount = useRef(0)
   const tapResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const touchStart = useRef(0)
@@ -121,6 +124,7 @@ function App() {
 
   const moveCarousel = (direction: number) => {
     if (memories.length < 2) return
+    setCarouselDirection(direction > 0 ? "next" : "previous")
     setActiveIndex(
       (current) => (current + direction + memories.length) % memories.length,
     )
@@ -180,11 +184,39 @@ function App() {
     setToast("记忆已删除")
   }
 
+  
+
+  const handleUploadButtonMove = (
+    event: React.PointerEvent<HTMLButtonElement>,
+  ) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    event.currentTarget.style.setProperty(
+      "--cta-x",
+      `${event.clientX - bounds.left}px`,
+    )
+    event.currentTarget.style.setProperty(
+      "--cta-y",
+      `${event.clientY - bounds.top}px`,
+    )
+  }
+
+  const handleUploadClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const button = event.currentTarget
+    button.classList.remove("is-activating")
+    window.requestAnimationFrame(() => button.classList.add("is-activating"))
+    window.setTimeout(() => button.classList.remove("is-activating"), 720)
+    navigator.vibrate?.(24)
+    uploadInput.current?.click()
+  }
+
   const activeMemory = memories[activeIndex]
 
   return (
     <main className="app-shell">
-      <section className="memory-space" aria-label="NFC 头箍数字记忆空间">
+      <section
+        className={`memory-space intro-${introPhase}`}
+        aria-label="NFC 头箍数字记忆空间"
+      >
         {introPhase !== "hidden" && (
           <button
             className={`intro-cover ${introPhase}`}
@@ -285,7 +317,15 @@ function App() {
           {memories.length ? (
             <>
               <div
-                className="polaroid-stage"
+                key={activeMemory.id}
+                className="carousel-ambient"
+                style={{ backgroundImage: `url("${activeMemory.src}")` }}
+                aria-hidden="true"
+              />
+              <div
+                className={`polaroid-stage direction-${carouselDirection} ${
+                  isDragging ? "is-dragging" : ""
+                }`}
                 onTouchStart={(event) => {
                   touchStart.current = event.touches[0].clientX
                   setIsDragging(true)
@@ -296,7 +336,15 @@ function App() {
                   if (Math.abs(distance) > 42) moveCarousel(distance > 0 ? -1 : 1)
                   setIsDragging(false)
                 }}
+                onTouchCancel={() => setIsDragging(false)}
               >
+                <span className="stage-depth-grid" aria-hidden="true" />
+                <span className="stage-orbit" aria-hidden="true" />
+                <span className="memory-index" aria-hidden="true">
+                  <strong>{String(activeIndex + 1).padStart(2, "0")}</strong>
+                  <i />
+                  <small>{String(memories.length).padStart(2, "0")}</small>
+                </span>
                 {memories.map((memory, index) => {
                   const offset =
                     (index - activeIndex + memories.length) % memories.length
@@ -332,6 +380,12 @@ function App() {
                             <PlayIcon />
                           </span>
                         )}
+                        <span className="photo-scan" aria-hidden="true" />
+                        <span className="photo-hud" aria-hidden="true">
+                          <i />
+                          MEMORY CAPTURED
+                          <b>{String(index + 1).padStart(2, "0")}</b>
+                        </span>
                       </span>
                       <span className="photo-caption">
                         <strong>{memory.location}</strong>
@@ -349,7 +403,12 @@ function App() {
                       type="button"
                       key={memory.id}
                       className={index === activeIndex ? "current" : ""}
-                      onClick={() => setActiveIndex(index)}
+                      onClick={() => {
+                        setCarouselDirection(
+                          index > activeIndex ? "next" : "previous",
+                        )
+                        setActiveIndex(index)
+                      }}
                       aria-label={`查看第 ${index + 1} 段记忆`}
                     />
                   ))}
@@ -380,8 +439,11 @@ function App() {
             <button
               className="upload-cta"
               type="button"
-              onClick={() => uploadInput.current?.click()}
+              onPointerMove={handleUploadButtonMove}
+              onClick={handleUploadClick}
             >
+              <i className="cta-energy" aria-hidden="true" />
+              <i className="cta-ripple" aria-hidden="true" />
               <CameraIcon />
               <span>
                 <strong>留下这一刻</strong>
