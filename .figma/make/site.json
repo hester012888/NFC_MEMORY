@@ -1,0 +1,10 @@
+{
+  "description": "Enables seamless NFC interactions for quick data exchange and contactless communication, enhancing convenience for users and businesses alike.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
