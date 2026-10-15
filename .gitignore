@@ -147,3 +147,12 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+
+# macOS 文件
+.DS_Store
+._*
+**/._*
+
+# npm 依赖
+node_modules/
