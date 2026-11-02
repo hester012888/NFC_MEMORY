@@ -1,0 +1,292 @@
+
+require('dotenv').config();
+
+const express = require('express');
+const cors = require('cors');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const app = express();
+const PORT = Number(process.env.PORT || 3001);
+const UPLOAD_ROOT = path.join(__dirname, 'uploads');
+
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN
+    ? process.env.FRONTEND_ORIGIN.split(',').map(v => v.trim())
+    : true
+}));
+
+app.use(express.json({ limit: '1mb' }));
+
+// 确保本地媒体根目录存在
+fs.mkdirSync(UPLOAD_ROOT, { recursive: true });
+
+function validateNfcId(value) {
+  return typeof value === 'string'
+    && /^[A-Za-z0-9_-]{1,64}$/.test(value);
+}
+
+function spaceDir(nfcid) {
+  return path.join(UPLOAD_ROOT, nfcid);
+}
+
+function mediaType(filename) {
+  return /\.mp4$/i.test(filename) ? 'video' : 'image';
+}
+
+// 只允许访问通过 API 读取的媒体，不直接暴露整个 uploads 目录
+function publicMediaItem(nfcid, filename, stats) {
+  const key = `spaces/${nfcid}/${filename}`;
+
+  return {
+    key,
+    name: filename,
+    size: stats.size,
+    lastModified: stats.mtime.toISOString(),
+    type: mediaType(filename),
+    url: `/api/spaces/${encodeURIComponent(nfcid)}/media/file/${encodeURIComponent(filename)}`
+  };
+}
+
+const storage = multer.diskStorage({
+  destination(req, file, cb) {
+    const nfcid = req.params.nfcid;
+
+    if (!validateNfcId(nfcid)) {
+      return cb(new Error('NFC ID 格式不正确'));
+    }
+
+    const dir = spaceDir(nfcid);
+
+    fs.mkdir(dir, { recursive: true }, err => cb(err, dir));
+  },
+
+  filename(req, file, cb) {
+    const ext = path.extname(file.originalname).toLowerCase();
+
+    const allowedExt = {
+      '.jpeg': '.jpg',
+      '.jpg': '.jpg',
+      '.png': '.png',
+      '.webp': '.webp',
+      '.mp4': '.mp4'
+    };
+
+    if (!allowedExt[ext]) {
+      return cb(new Error('只支持 JPG、PNG、WebP 图片和 MP4 视频'));
+    }
+
+    cb(null, `${Date.now()}-${crypto.randomUUID()}${allowedExt[ext]}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 100 * 1024 * 1024,
+    files: 6
+  },
+  fileFilter(req, file, cb) {
+    const allowed = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'video/mp4'
+    ];
+
+    if (!allowed.includes(file.mimetype)) {
+      return cb(new Error('只支持 JPG、PNG、WebP 图片和 MP4 视频'));
+    }
+
+    cb(null, true);
+  }
+});
+
+// 健康检查
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    service: 'shancheng-memory-api',
+    storage: 'local'
+  });
+});
+
+// 获取某个 NFC 空间的媒体列表
+app.get('/api/spaces/:nfcid/media', async (req, res, next) => {
+  try {
+    const { nfcid } = req.params;
+
+    if (!validateNfcId(nfcid)) {
+      return res.status(400).json({ error: 'NFC ID 格式不正确' });
+    }
+
+    const dir = spaceDir(nfcid);
+    await fs.promises.mkdir(dir, { recursive: true });
+
+    const names = await fs.promises.readdir(dir);
+    const items = [];
+
+    for (const name of names) {
+      const fullPath = path.join(dir, name);
+      const stats = await fs.promises.stat(fullPath);
+
+      if (!stats.isFile()) continue;
+
+      if (!/\.(jpe?g|png|webp|mp4)$/i.test(name)) continue;
+
+      items.push(publicMediaItem(nfcid, name, stats));
+    }
+
+    items.sort((a, b) =>
+      new Date(b.lastModified) - new Date(a.lastModified)
+    );
+
+    res.json({ nfcid, items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 读取图片或视频
+app.get(
+  '/api/spaces/:nfcid/media/file/:filename',
+  async (req, res, next) => {
+    try {
+      const { nfcid, filename } = req.params;
+
+      if (
+        !validateNfcId(nfcid) ||
+        !/^[A-Za-z0-9_.-]{1,200}$/.test(filename) ||
+        filename.includes('..')
+      ) {
+        return res.status(400).json({ error: '文件路径无效' });
+      }
+
+      const filePath = path.join(spaceDir(nfcid), filename);
+      const stats = await fs.promises.stat(filePath);
+
+      if (!stats.isFile()) {
+        return res.status(404).json({ error: '文件不存在' });
+      }
+
+      res.sendFile(filePath);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        return res.status(404).json({ error: '文件不存在' });
+      }
+      next(err);
+    }
+  }
+);
+
+// 上传：multipart/form-data，字段名 files，最多 6 个
+app.post(
+  '/api/spaces/:nfcid/media',
+  (req, res, next) => {
+    if (!validateNfcId(req.params.nfcid)) {
+      return res.status(400).json({ error: 'NFC ID 格式不正确' });
+    }
+    next();
+  },
+  upload.array('files', 6),
+  (req, res, next) => {
+    try {
+      const { nfcid } = req.params;
+      const files = req.files || [];
+
+      if (!files.length) {
+        return res.status(400).json({ error: '请选择要上传的文件' });
+      }
+
+      const items = files.map(file => ({
+        key: `spaces/${nfcid}/${file.filename}`,
+        name: file.filename,
+        size: file.size,
+        type: file.mimetype.startsWith('video/') ? 'video' : 'image',
+        url: `/api/spaces/${encodeURIComponent(nfcid)}/media/file/${encodeURIComponent(file.filename)}`
+      }));
+
+      res.status(201).json({
+        message: '上传成功',
+        nfcid,
+        items
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// 删除：只能删除当前 NFC 空间内的文件
+app.delete('/api/spaces/:nfcid/media', async (req, res, next) => {
+  try {
+    const { nfcid } = req.params;
+    const { key } = req.body || {};
+
+    if (!validateNfcId(nfcid)) {
+      return res.status(400).json({ error: 'NFC ID 格式不正确' });
+    }
+
+    const prefix = `spaces/${nfcid}/`;
+
+    if (
+      typeof key !== 'string' ||
+      !key.startsWith(prefix) ||
+      key.includes('..') ||
+      key.endsWith('/')
+    ) {
+      return res.status(400).json({
+        error: '文件路径无效或不属于当前空间'
+      });
+    }
+
+    const filename = key.slice(prefix.length);
+
+    if (
+      !filename ||
+      filename.includes('/') ||
+      !/^[A-Za-z0-9_.-]{1,200}$/.test(filename)
+    ) {
+      return res.status(400).json({ error: '文件路径无效' });
+    }
+
+    await fs.promises.unlink(path.join(spaceDir(nfcid), filename));
+
+    res.json({ message: '删除成功', key });
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      return res.status(404).json({ error: '文件不存在' });
+    }
+    next(err);
+  }
+});
+
+// 统一错误处理
+app.use((err, req, res, next) => {
+  console.error('[API Error]', err.message);
+
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? '单个文件不能超过 100 MB'
+      : err.code === 'LIMIT_FILE_COUNT'
+        ? '一次最多上传 6 个文件'
+        : '文件上传失败';
+
+    return res.status(400).json({ error: message });
+  }
+
+  if (err.message === '只支持 JPG、PNG、WebP 图片和 MP4 视频') {
+    return res.status(400).json({ error: err.message });
+  }
+
+  res.status(500).json({
+    error: '服务器处理失败，请稍后重试'
+  });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`山城拾光本地 API 已启动：http://localhost:${PORT}`);
+  console.log(`媒体保存目录：${UPLOAD_ROOT}`);
+});

@@ -83,6 +83,8 @@ button:focus-visible {
   filter: blur(12px);
   pointer-events: none;
   transform: scale(1.08);
+  animation: cover-exit .7s cubic-bezier(.65, 0, .35, 1) forwards;
+
 }
 
 .intro-stars {
@@ -503,7 +505,7 @@ button:focus-visible {
     filter 0.7s ease,
     box-shadow 0.7s ease;
   transform-style: preserve-3d;
-  will-change: transform, opacity, filter;
+  /* will-change: transform, opacity, filter; */
 }
 
 .polaroid.active {
@@ -519,7 +521,7 @@ button:focus-visible {
 .polaroid.previous {
   z-index: 1;
   opacity: 0.58;
-  filter: blur(1.5px) saturate(0.66) brightness(0.7);
+  filter: blur(0.5px) saturate(0.75) brightness(0.6);
   transform: translateX(-116%) translateY(24px) translateZ(-90px) rotateY(24deg) rotate(-8deg) scale(0.79);
   transform-origin: right center;
 }
@@ -527,7 +529,7 @@ button:focus-visible {
 .polaroid.next {
   z-index: 1;
   opacity: 0.58;
-  filter: blur(1.5px) saturate(0.66) brightness(0.7);
+  filter: blur(0.5px) saturate(0.75) brightness(0.6);
   transform: translateX(16%) translateY(24px) translateZ(-90px) rotateY(-24deg) rotate(8deg) scale(0.79);
   transform-origin: left center;
 }
@@ -1096,7 +1098,7 @@ button:focus-visible {
 .intro-hidden>.title-block,
 .intro-hidden>.carousel-section,
 .intro-hidden>.city-footer {
-  animation: page-layer-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: none;
 }
 
 .intro-hidden>.title-block {
@@ -1151,7 +1153,8 @@ button:focus-visible {
 }
 
 .stage-depth-grid {
-  -webkit-mask-image: none; mask-image: none; 
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .polaroid-stage::before {
@@ -1248,7 +1251,9 @@ button:focus-visible {
   animation: card-arrive-previous 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
   
 } */
-.memory-index i::after { animation: none; }
+.memory-index i::after {
+  animation: none;
+}
 
 
 .direction-next .polaroid.active,
@@ -1444,6 +1449,8 @@ button:focus-visible {
   overflow: hidden;
   border: 1px solid rgba(239, 204, 147, 0.32);
   border-radius: 50%;
+  line-height: 1;
+  padding-bottom: 3px;
   transition:
     color 0.35s ease,
     background 0.35s ease,
@@ -2191,8 +2198,8 @@ button:focus-visible {
   border-radius: 10px;
   background: linear-gradient(135deg, rgba(14, 43, 64, .62), rgba(20, 57, 80, .25));
   box-shadow: 0 8px 32px rgba(0, 0, 0, .12), inset 0 1px 0 rgba(255, 255, 255, .08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   text-align: left;
   opacity: 0;
   animation: card-arrive .9s ease-out forwards, card-float 6s 1.2s ease-in-out infinite;
@@ -2343,10 +2350,7 @@ button:focus-visible {
   margin-left: 5px;
 }
 
-.intro-cover.exiting {
-  pointer-events: none;
-  animation: cover-exit .7s cubic-bezier(.65, 0, .35, 1) forwards;
-}
+
 
 @keyframes cover-appear {
   from {

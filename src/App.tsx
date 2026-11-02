@@ -9,6 +9,51 @@ interface Memory {
   location: string
   date: string
   isUpload?: boolean
+  key?: string
+}
+// 本地开发时，Node.js 后端运行在 3001 端口
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || ""
+
+// 优先读取 NFC 链接中的 tag_id 或 nfcid，暂时默认使用 215 测试
+const params = new URLSearchParams(window.location.search)
+const NFC_ID = (
+  params.get("tag_id") ||
+  params.get("nfcid") ||
+  ""
+).trim()
+// 新生成的 Tag ID 固定为 16 位英文字母和数字
+const HAS_NFC_ID = /^[A-Za-z0-9]{16}$/.test(NFC_ID)
+
+interface ApiMedia {
+  key: string
+  name: string
+  size: number
+  lastModified?: string
+  type: "image" | "video"
+  url: string
+}
+
+function toMemory(item: ApiMedia): Memory {
+  const dateValue = item.lastModified
+    ? new Date(item.lastModified)
+    : new Date()
+
+  const date = [
+    dateValue.getFullYear(),
+    String(dateValue.getMonth() + 1).padStart(2, "0"),
+    String(dateValue.getDate()).padStart(2, "0"),
+  ].join(".")
+
+  return {
+    id: item.key,
+    key: item.key,
+    kind: item.type,
+    src: `${API_BASE}${item.url}`,
+    location: "我的重庆 · 新记忆",
+    date,
+    isUpload: true,
+  }
 }
 
 const SEED_MEMORIES: Memory[] = [
@@ -102,6 +147,54 @@ function App() {
     }
   }, [])
 
+ 
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadMedia() {
+      // 没有合法 NFC ID 时，不请求后端媒体接口
+      if (!HAS_NFC_ID) {
+        setMemories([])
+        return
+      }
+
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/spaces/${encodeURIComponent(NFC_ID)}/media`,
+        )
+
+        if (!response.ok) {
+          throw new Error(`读取失败：HTTP ${response.status}`)
+        }
+
+        const data: { nfcid: string; items: ApiMedia[] } =
+          await response.json()
+
+        if (!cancelled) {
+          // setMemories([
+          //   ...SEED_MEMORIES,
+          //   ...data.items.map(toMemory),
+          // ])
+          setMemories(data.items.map(toMemory))
+        }
+      } catch (error) {
+        console.error("读取媒体失败：", error)
+
+        if (!cancelled) {
+          setMemories([])
+          setToast("读取记忆失败，请检查 NFC 验证和后端服务")
+        }
+      }
+    }
+
+    void loadMedia()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+
   useEffect(() => {
     if (viewer || manageOpen || isDragging || memories.length < 2) return
     const timer = window.setInterval(() => {
@@ -144,44 +237,174 @@ function App() {
     }, 1800)
   }
 
-  const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []).slice(0, 6)
-    const accepted = files.filter((file) => {
-      const isImage = file.type.startsWith("image/")
-      const isVideo = file.type === "video/mp4" || file.type === "video/quicktime"
-      const withinLimit = isImage
-        ? file.size <= 10 * 1024 * 1024
-        : file.size <= 100 * 1024 * 1024
-      return (isImage || isVideo) && withinLimit
-    })
+  // const handleUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  //   const files = Array.from(event.target.files ?? []).slice(0, 6)
+  //   const accepted = files.filter((file) => {
+  //     const isImage = file.type.startsWith("image/")
+  //     const isVideo = file.type === "video/mp4" || file.type === "video/quicktime"
+  //     const withinLimit = isImage
+  //       ? file.size <= 10 * 1024 * 1024
+  //       : file.size <= 100 * 1024 * 1024
+  //     return (isImage || isVideo) && withinLimit
+  //   })
 
-    if (!accepted.length) {
-      setToast("请选择符合大小要求的照片或视频")
+  //   if (!accepted.length) {
+  //     setToast("请选择符合大小要求的照片或视频")
+  //     event.target.value = ""
+  //     return
+  //   }
+
+  //   const now = new Date()
+  //   const date = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`
+  //   const additions: Memory[] = accepted.map((file, index) => ({
+  //     id: `${now.getTime()}-${index}`,
+  //     kind: file.type.startsWith("video/") ? "video" : "image",
+  //     src: URL.createObjectURL(file),
+  //     location: "我的重庆 · 新记忆",
+  //     date,
+  //     isUpload: true,
+  //   }))
+  //   setMemories((current) => [...current, ...additions])
+  //   setActiveIndex(memories.length)
+  //   setToast(`已收藏 ${additions.length} 段新记忆`)
+  //   event.target.value = ""
+  // }
+  const handleUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    if (!HAS_NFC_ID) {
+      setToast("请先感应 NFC 贴片，再进入记忆空间")
       event.target.value = ""
       return
     }
-
-    const now = new Date()
-    const date = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, "0")}.${String(now.getDate()).padStart(2, "0")}`
-    const additions: Memory[] = accepted.map((file, index) => ({
-      id: `${now.getTime()}-${index}`,
-      kind: file.type.startsWith("video/") ? "video" : "image",
-      src: URL.createObjectURL(file),
-      location: "我的重庆 · 新记忆",
-      date,
-      isUpload: true,
-    }))
-    setMemories((current) => [...current, ...additions])
-    setActiveIndex(memories.length)
-    setToast(`已收藏 ${additions.length} 段新记忆`)
-    event.target.value = ""
+    const input = event.currentTarget
+    const files = Array.from(input.files ?? []).slice(0, 6)
+  
+    const accepted = files.filter((file) => {
+      const isImage = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/heic",
+        "image/heif"
+      ].includes(file.type)
+  
+      // 后端目前只接受 MP4，不接受 QuickTime/MOV
+      const isVideo =[
+        "video/mp4", 
+        "video/quicktime"
+      ].includes(file.type)
+  
+      const withinLimit = isImage
+        ? file.size <= 10 * 1024 * 1024
+        : file.size <= 100 * 1024 * 1024
+  
+      return (isImage || isVideo) && withinLimit
+    })
+  
+    if (!accepted.length) {
+      setToast("请选择符合大小要求的 JPG、PNG、WebP、HEIC、HEIF、MP4 或 MOV 文件")
+      input.value = ""
+      return
+    }
+  
+    if (files.length > 6) {
+      setToast("一次最多上传 6 个文件")
+      input.value = ""
+      return
+    }
+  
+    const formData = new FormData()
+  
+    accepted.forEach((file) => {
+      formData.append("files", file)
+    })
+  
+    try {
+      setToast("正在上传，请稍候…")
+  
+      const response = await fetch(
+        `${API_BASE}/api/spaces/${encodeURIComponent(NFC_ID)}/media`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      )
+  
+      const result = await response.json()
+  
+      if (!response.ok) {
+        throw new Error(result.error || `上传失败：HTTP ${response.status}`)
+      }
+  
+      // 将服务器返回的媒体加入页面
+      const uploaded: Memory[] = (result.items as ApiMedia[]).map(toMemory)
+  
+      setMemories((current) => [...current, ...uploaded])
+      setActiveIndex(memories.length)
+      setToast(`成功保存 ${uploaded.length} 段山城记忆`)
+    } catch (error) {
+      console.error("上传失败：", error)
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "上传失败，请检查后端连接",
+      )
+    } finally {
+      input.value = ""
+    }
   }
 
-  const deleteMemory = (memory: Memory) => {
-    if (!window.confirm("确定删除这段山城记忆吗？删除后无法恢复。")) return
-    if (memory.isUpload) URL.revokeObjectURL(memory.src)
-    setMemories((current) => current.filter((item) => item.id !== memory.id))
-    setToast("记忆已删除")
+  const deleteMemory = async (memory: Memory) => {
+    if (!HAS_NFC_ID) {
+      setToast("请先感应 NFC 贴片，再进入记忆空间")
+      return
+    }
+    if (!window.confirm("确定删除这段山城记忆吗？删除后无法恢复。")) {
+      return
+    }
+  
+    // 演示图片没有后端 key，只从页面移除
+    if (!memory.key) {
+      setMemories((current) =>
+        current.filter((item) => item.id !== memory.id),
+      )
+      setToast("演示记忆已从页面移除")
+      return
+    }
+  
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/spaces/${encodeURIComponent(NFC_ID)}/media`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ key: memory.key }),
+        },
+      )
+  
+      const result = await response.json()
+  
+      if (!response.ok) {
+        throw new Error(result.error || `删除失败：HTTP ${response.status}`)
+      }
+  
+      setMemories((current) =>
+        current.filter((item) => item.id !== memory.id),
+      )
+  
+      setToast("记忆已从服务器删除")
+    } catch (error) {
+      console.error("删除失败：", error)
+  
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "删除失败，请检查后端连接",
+      )
+    }
   }
 
   
@@ -462,7 +685,7 @@ function App() {
           ref={uploadInput}
           className="visually-hidden"
           type="file"
-          accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+          accept="image/jpeg,image/png,image/webp,.heic,.heif,video/mp4,video/quicktime"
           multiple
           onChange={handleUpload}
         />

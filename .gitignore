@@ -156,3 +156,14 @@ vite.config.ts.timestamp-*
 
 # npm 依赖
 node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
